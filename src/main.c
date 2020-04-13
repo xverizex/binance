@@ -206,22 +206,40 @@ static void parse_line ( char *buffer ) {
 	double price_item = atof ( json_object_get_string ( obj_open_price ) );
 	double res = 0;
 	double res_lower = 0;
-	if ( price_btc_lower < price_item ) {
-		res = ( ( price_item - price_btc_lower ) / price_btc_lower ) * 100;
-	} else {
-		res = 0;
-	}
-
-	if ( price_btc_lower > price_item ) {
-		res_lower = ( ( price_btc_lower - price_item ) / price_item ) * 100;
-	} 
-
-	if ( res_lower > btcusd_percent_point && s_s.btcusd_switch ) overflow_btc = 1;
-	if ( res_lower > eth_percent_point && s_s.eth_switch ) overflow_eth = 1;
 
 	int type_of_coin = -1;
 	if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "BTCUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_BTC;
 	else if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "ETHUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_ETH;
+
+	switch ( type_of_coin ) {
+		case TYPE_OF_COIN_BTC:
+			if ( price_btc_lower < price_item ) {
+				res = ( ( price_item - price_btc_lower ) / price_btc_lower ) * 100;
+			} else {
+				res = 0;
+			}
+
+			if ( price_btc_lower > price_item ) {
+				res_lower = ( ( price_btc_lower - price_item ) / price_item ) * 100;
+			} 
+			if ( res_lower > btcusd_percent_point && s_s.btcusd_switch ) overflow_btc = 1;
+			break;
+		case TYPE_OF_COIN_ETH:
+			if ( price_eth_lower < price_item ) {
+				res = ( ( price_item - price_eth_lower ) / price_eth_lower ) * 100;
+			} else {
+				res = 0;
+			}
+
+			if ( price_eth_lower > price_item ) {
+				res_lower = ( ( price_eth_lower - price_item ) / price_item ) * 100;
+			} 
+			if ( res_lower > eth_percent_point && s_s.eth_switch ) overflow_eth = 1;
+			break;
+	}
+
+
+
 
 	//printf ( "%f %f %f %f\n", res_lower, btcusd_percent_point, price_btc_lower, price_item );
 
@@ -346,7 +364,7 @@ static void parse_line ( char *buffer ) {
 				if ( !s_s.eth_update ) break;
 				if ( price_item >= price_eth_lower && overflow_eth ) {
 					ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
-					overflow_btc = 0;
+					overflow_eth = 0;
 					g_notification_set_body ( notify, "Точка входа ETH" );
 					g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
 					gtk_tree_store_append ( store, &iter, NULL );
@@ -696,12 +714,19 @@ static void button_save_clicked_cb ( GtkButton *btn, gpointer data ) {
 	const char *btcusd_str = gtk_entry_get_text ( ( GtkEntry * ) entry_btcusd );
 	const char *btcusd_lower_str = gtk_entry_get_text ( ( GtkEntry * ) entry_btcusd_lower );
 	const char *btcusd_point_str = gtk_entry_get_text ( ( GtkEntry * ) entry_btcusd_percent_point );
+	const char *eth_str = gtk_entry_get_text ( ( GtkEntry * ) entry_eth_up );
+	const char *eth_lower_str = gtk_entry_get_text ( ( GtkEntry * ) entry_eth_lower );
+	const char *eth_point_str = gtk_entry_get_text ( ( GtkEntry * ) entry_eth_point );
 	s_s.btcusd_switch = gtk_switch_get_active ( ( GtkSwitch * ) switch_btcusd_point );
 	s_s.eth_switch = gtk_switch_get_active ( ( GtkSwitch * ) switch_eth_point );
 
 	strncpy ( &s_s.btcusd[0], btcusd_str, strlen ( btcusd_str ) + 1 );
 	strncpy ( &s_s.btcusd_lower[0], btcusd_lower_str, strlen ( btcusd_lower_str ) + 1 );
 	strncpy ( &s_s.btcusd_point[0], btcusd_point_str, strlen ( btcusd_point_str ) + 1 );
+
+	strncpy ( &s_s.eth[0], eth_str, strlen ( eth_str ) + 1 );
+	strncpy ( &s_s.eth_lower[0], eth_lower_str, strlen ( eth_lower_str ) + 1 );
+	strncpy ( &s_s.eth_point[0], eth_point_str, strlen ( eth_point_str ) + 1 );
 
 	price_btc_upper_percent = atof ( s_s.btcusd );
 	price_btc_lower = atof ( s_s.btcusd_lower );
