@@ -39,19 +39,22 @@ GtkApplication *app;
 GtkWidget *window;
 GtkWidget *window_settings;
 GtkWidget *label_btc_update;
+GtkWidget *label_eth_update;
 
 char *config_dir;
 char *config_file;
 char *config_file_error;
 
-double price_upper;
-double price_lower;
+double price_btc_upper_percent;
+double price_btc_lower;
 double btcusd_percent_point;
 
-struct selected {
-	GtkWidget *combo_symbol;
-	GtkWidget *combo_kline;
-} sel;
+double price_eth_upper_percent;
+double price_eth_lower;
+double eth_percent_point;
+
+#define TYPE_OF_COIN_BTC               0
+#define TYPE_OF_COIN_ETH               1
 
 GNotification *notify;
 
@@ -80,11 +83,13 @@ enum {
 };
 
 struct settings_symbol {
+	int btc_update;
 	char btcusd[64];
 	char btcusd_lower[64];
 	char btcusd_point[64];
 	int btcusd_switch;
 
+	int eth_update;
 	char eth[64];
 	char eth_lower[64];
 	char eth_point[64];
@@ -95,7 +100,8 @@ struct settings_symbol {
 GtkTreeStore *store;
 ca_context *ca;
 
-int overflow = 0;
+int overflow_btc = 0;
+int overflow_eth = 0;
 
 pthread_t thread_read;
 int current = 0;
@@ -109,6 +115,8 @@ char unsubscribe[BUF_SEND_SIGNAL];
 char subscribe[BUF_SEND_SIGNAL];
 int btc_update_mutex = 0;
 char btc_update[64];
+int eth_update_mutex = 0;
+char eth_update[64];
 
 static void sig_handler ( int sig ) {
 	ws_set_data ( &ws, unsubscribe );
@@ -121,6 +129,14 @@ static gboolean update_cb ( gpointer data ) {
 	if ( btc_update_mutex ) {
 		gtk_label_set_markup ( ( GtkLabel * ) label_btc_update, btc_update );
 		btc_update_mutex = 0;
+	}
+	return FALSE;
+}
+
+static gboolean update_eth_cb ( gpointer data ) {
+	if ( eth_update_mutex ) {
+		gtk_label_set_markup ( ( GtkLabel * ) label_eth_update, eth_update );
+		eth_update_mutex = 0;
 	}
 	return FALSE;
 }
@@ -190,19 +206,24 @@ static void parse_line ( char *buffer ) {
 	double price_item = atof ( json_object_get_string ( obj_open_price ) );
 	double res = 0;
 	double res_lower = 0;
-	if ( price_lower < price_item ) {
-		res = ( ( price_item - price_lower ) / price_lower ) * 100;
+	if ( price_btc_lower < price_item ) {
+		res = ( ( price_item - price_btc_lower ) / price_btc_lower ) * 100;
 	} else {
 		res = 0;
 	}
 
-	if ( price_lower > price_item ) {
-		res_lower = ( ( price_lower - price_item ) / price_item ) * 100;
+	if ( price_btc_lower > price_item ) {
+		res_lower = ( ( price_btc_lower - price_item ) / price_item ) * 100;
 	} 
 
-	if ( res_lower > btcusd_percent_point && s_s.btcusd_switch ) overflow = 1;
+	if ( res_lower > btcusd_percent_point && s_s.btcusd_switch ) overflow_btc = 1;
+	if ( res_lower > eth_percent_point && s_s.eth_switch ) overflow_eth = 1;
 
-	//printf ( "%f %f %f %f\n", res_lower, btcusd_percent_point, price_lower, price_item );
+	int type_of_coin = -1;
+	if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "BTCUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_BTC;
+	else if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "ETHUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_ETH;
+
+	//printf ( "%f %f %f %f\n", res_lower, btcusd_percent_point, price_btc_lower, price_item );
 
 	GtkTreeIter iter;
 	time_t time_time = atoi ( json_object_get_string ( obj_time ) );
@@ -223,83 +244,170 @@ static void parse_line ( char *buffer ) {
 	static int update_curs = 0;
 	update_curs++;
 
-	const char *curs = gtk_label_get_text ( ( GtkLabel * ) label_btc_update );
-	if ( curs[0] == 0 && !btc_update_mutex ) {
-		snprintf ( btc_update, 64, "%.0f", price_item );
-		btc_update_mutex = 1;
-		g_idle_add ( update_cb, NULL );
-	} else if ( curs[0] >= '0' && curs[0] <= '9' && !btc_update_mutex && update_curs > 10 ) {
-		double cu = atof ( curs );
-		if ( cu > price_item ) {
-			snprintf ( btc_update, 64, "<span foreground='red'>%.0f</span>", price_item );
-		} else {
-			snprintf ( btc_update, 64, "<span foreground='green'>%.0f</span>", price_item );
-		}
-		btc_update_mutex = 1;
-		update_curs = 0;
-		g_idle_add ( update_cb, NULL );
+	switch ( type_of_coin ) {
+		case TYPE_OF_COIN_BTC:
+			{
+				const char *curs = gtk_label_get_text ( ( GtkLabel * ) label_btc_update );
+				if ( curs[0] == 0 && !btc_update_mutex ) {
+					snprintf ( btc_update, 64, "%.0f", price_item );
+					btc_update_mutex = 1;
+					g_idle_add ( update_cb, NULL );
+				} else if ( curs[0] >= '0' && curs[0] <= '9' && !btc_update_mutex && update_curs > 10 ) {
+					double cu = atof ( curs );
+					if ( cu > price_item ) {
+						snprintf ( btc_update, 64, "<span foreground='red'>%.0f</span>", price_item );
+					} else {
+						snprintf ( btc_update, 64, "<span foreground='green'>%.0f</span>", price_item );
+					}
+					btc_update_mutex = 1;
+					update_curs = 0;
+					g_idle_add ( update_cb, NULL );
+				}
+				if ( !s_s.btc_update ) break;
+				if ( price_item >= price_btc_lower && overflow_btc ) {
+					ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
+					overflow_btc = 0;
+					g_notification_set_body ( notify, "Точка входа BTC" );
+					g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
+					gtk_tree_store_append ( store, &iter, NULL );
+					gtk_tree_store_set ( store, &iter,
+						ID, id_line++,
+						NOTIFY, "ТОЧКА ВХОДА",
+						TIME, tt_time,
+						SYMBOL, json_object_get_string ( obj_symbol ),
+						START, ts_time,
+						CLOSE, tc_time,
+						SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
+						INTERVAL, json_object_get_string ( obj_interval ),
+						FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
+						LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
+						OPEN_PRICE, json_object_get_string ( obj_open_price ),
+						CLOSE_PRICE, json_object_get_string ( obj_close_price ),
+						HIGH_PRICE, json_object_get_string ( obj_high_price ),
+						LOW_PRICE, json_object_get_string ( obj_low_price ),
+						BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
+						NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
+						IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
+						QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
+						TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
+						TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
+						-1
+					);
+				} else
+				if ( res >= price_btc_upper_percent && price_item > price_btc_lower ) {
+					ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
+					g_notification_set_body ( notify, "Подъем курса BTC" );
+					g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
+					gtk_tree_store_append ( store, &iter, NULL );
+					gtk_tree_store_set ( store, &iter,
+						ID, id_line++,
+						NOTIFY, "ПОДЪЕМ КУРСА",
+						TIME, tt_time,
+						SYMBOL, json_object_get_string ( obj_symbol ),
+						START, ts_time,
+						CLOSE, tc_time,
+						SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
+						INTERVAL, json_object_get_string ( obj_interval ),
+						FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
+						LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
+						OPEN_PRICE, json_object_get_string ( obj_open_price ),
+						CLOSE_PRICE, json_object_get_string ( obj_close_price ),
+						HIGH_PRICE, json_object_get_string ( obj_high_price ),
+						LOW_PRICE, json_object_get_string ( obj_low_price ),
+						BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
+						NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
+						IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
+						QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
+						TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
+						TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
+						-1
+					);
+				}
+			}
+			break;
+		case TYPE_OF_COIN_ETH:
+			{
+				const char *curs = gtk_label_get_text ( ( GtkLabel * ) label_eth_update );
+				if ( curs[0] == 0 && !eth_update_mutex ) {
+					snprintf ( eth_update, 64, "%.0f", price_item );
+					eth_update_mutex = 1;
+					g_idle_add ( update_eth_cb, NULL );
+				} else if ( curs[0] >= '0' && curs[0] <= '9' && !eth_update_mutex && update_curs > 10 ) {
+					double cu = atof ( curs );
+					if ( cu > price_item ) {
+						snprintf ( eth_update, 64, "<span foreground='red'>%.0f</span>", price_item );
+					} else {
+						snprintf ( eth_update, 64, "<span foreground='green'>%.0f</span>", price_item );
+					}
+					eth_update_mutex = 1;
+					update_curs = 0;
+					g_idle_add ( update_eth_cb, NULL );
+				}
+				if ( !s_s.eth_update ) break;
+				if ( price_item >= price_eth_lower && overflow_eth ) {
+					ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
+					overflow_btc = 0;
+					g_notification_set_body ( notify, "Точка входа ETH" );
+					g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
+					gtk_tree_store_append ( store, &iter, NULL );
+					gtk_tree_store_set ( store, &iter,
+						ID, id_line++,
+						NOTIFY, "ТОЧКА ВХОДА",
+						TIME, tt_time,
+						SYMBOL, json_object_get_string ( obj_symbol ),
+						START, ts_time,
+						CLOSE, tc_time,
+						SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
+						INTERVAL, json_object_get_string ( obj_interval ),
+						FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
+						LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
+						OPEN_PRICE, json_object_get_string ( obj_open_price ),
+						CLOSE_PRICE, json_object_get_string ( obj_close_price ),
+						HIGH_PRICE, json_object_get_string ( obj_high_price ),
+						LOW_PRICE, json_object_get_string ( obj_low_price ),
+						BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
+						NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
+						IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
+						QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
+						TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
+						TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
+						-1
+					);
+				} else
+				if ( res >= price_eth_upper_percent && price_item > price_eth_lower ) {
+					ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
+					g_notification_set_body ( notify, "Подъем курса ETH" );
+					g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
+					gtk_tree_store_append ( store, &iter, NULL );
+					gtk_tree_store_set ( store, &iter,
+						ID, id_line++,
+						NOTIFY, "ПОДЪЕМ КУРСА",
+						TIME, tt_time,
+						SYMBOL, json_object_get_string ( obj_symbol ),
+						START, ts_time,
+						CLOSE, tc_time,
+						SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
+						INTERVAL, json_object_get_string ( obj_interval ),
+						FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
+						LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
+						OPEN_PRICE, json_object_get_string ( obj_open_price ),
+						CLOSE_PRICE, json_object_get_string ( obj_close_price ),
+						HIGH_PRICE, json_object_get_string ( obj_high_price ),
+						LOW_PRICE, json_object_get_string ( obj_low_price ),
+						BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
+						NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
+						IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
+						QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
+						TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
+						TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
+						-1
+					);
+				}
+			}
+			break;
 	}
-//	printf ( "%f %f:%f %f\n", price_upper, res, price_lower, price_item );
+//	printf ( "%f %f:%f %f\n", price_btc_upper_percent, res, price_btc_lower, price_item );
 
-	if ( price_item >= price_lower && overflow ) {
-		ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
-		overflow = 0;
-		g_notification_set_body ( notify, "Точка входа" );
-		g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
-		gtk_tree_store_append ( store, &iter, NULL );
-		gtk_tree_store_set ( store, &iter,
-				ID, id_line++,
-				NOTIFY, "ТОЧКА ВХОДА",
-				TIME, tt_time,
-				SYMBOL, json_object_get_string ( obj_symbol ),
-				START, ts_time,
-				CLOSE, tc_time,
-				SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
-				INTERVAL, json_object_get_string ( obj_interval ),
-				FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
-				LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
-				OPEN_PRICE, json_object_get_string ( obj_open_price ),
-				CLOSE_PRICE, json_object_get_string ( obj_close_price ),
-				HIGH_PRICE, json_object_get_string ( obj_high_price ),
-				LOW_PRICE, json_object_get_string ( obj_low_price ),
-				BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
-				NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
-				IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
-				QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
-				TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
-				TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
-				-1
-				);
-	} else
-	if ( res >= price_upper && price_item > price_lower ) {
-		ca_context_play ( ca, 1, CA_PROP_EVENT_ID, "desktop-login", NULL );
-		g_notification_set_body ( notify, "Подъем курса" );
-		g_application_send_notification ( ( GApplication * ) app, "com.xverizex.binance", notify );
-		gtk_tree_store_append ( store, &iter, NULL );
-		gtk_tree_store_set ( store, &iter,
-				ID, id_line++,
-				NOTIFY, "ПОДЪЕМ КУРСА",
-				TIME, tt_time,
-				SYMBOL, json_object_get_string ( obj_symbol ),
-				START, ts_time,
-				CLOSE, tc_time,
-				SYMBOL_TRADE, json_object_get_string ( obj_symbol_trade ),
-				INTERVAL, json_object_get_string ( obj_interval ),
-				FIRST_TRADE_ID, json_object_get_string ( obj_first_trade_id ),
-				LAST_TRADE_ID, json_object_get_string ( obj_last_trade_id ),
-				OPEN_PRICE, json_object_get_string ( obj_open_price ),
-				CLOSE_PRICE, json_object_get_string ( obj_close_price ),
-				HIGH_PRICE, json_object_get_string ( obj_high_price ),
-				LOW_PRICE, json_object_get_string ( obj_low_price ),
-				BASE_ASSET_VOLUME, json_object_get_string ( obj_base_asset_volume ),
-				NUMBER_OF_TRADER, json_object_get_string ( obj_number_of_trade ),
-				IS_KLINE_CLOSED, json_object_get_string ( obj_close ),
-				QUOTE_ASSET_VOLUME, json_object_get_string ( obj_quote_asset_volume ),
-				TAKER_BASE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_base ),
-				TAKER_QUOTE_ASSET_VOLUME, json_object_get_string ( obj_taker_buy_quote ),
-				-1
-				);
-	}
 
 #if 0
 	json_object_put ( obj_start_time );
@@ -348,9 +456,10 @@ static void init_strings ( ) {
 	char *s;
 
 	const char *sym[] = {
-		"btcusdt"
+		"btcusdt",
+		"ethusdt"
 	};
-#define TOTAL_SYM                   1
+#define TOTAL_SYM                   2
 
 	for ( int i = 0; i < 2; i++ ) {
 		switch ( i ) {
@@ -464,7 +573,7 @@ static void action_connect_cb ( GSimpleAction *action, GVariant *parameter, gpoi
 	ws_write ( &ws );
 }
 
-const char *style = "box#box_select { background-color: #4c4c4c; } label#label_symbol { color: #e1ff5a; } label#label_kline { color: #e1ff5a; } frame#frame_top { background-color: #3c3c3c; border-radius: 6px; } button#button_accept { border-radius: 6px; } button#button_clear { border-radius: 6px; } frame#group { border-radius: 6px; } box#box_item { background-color: #cccccc; } label#curs_up { color: #3aff9d; } label#curs_down { color: #ff1317; }";
+const char *style = "box#box_select { background-color: #4c4c4c; } label#label_symbol { color: #e1ff5a; } label#label_kline { color: #e1ff5a; } frame#frame_top { background-color: #3c3c3c; border-radius: 6px; } button#button_accept { border-radius: 6px; } button#button_clear { border-radius: 6px; } frame#group { } box#box_item { background-color: #cccccc; } label#curs_up { color: #3aff9d; } label#curs_down { color: #ff1317; }";
 
 static void get_tree_store ( GtkWidget *tree_view ) {
 	store = gtk_tree_store_new ( N_COUNT,
@@ -543,6 +652,12 @@ GtkWidget *entry_btcusd;
 GtkWidget *entry_btcusd_lower;
 GtkWidget *entry_btcusd_percent_point;
 GtkWidget *switch_btcusd_point;
+GtkWidget *entry_eth_point;
+GtkWidget *switch_eth_point;
+GtkWidget *entry_eth_up;
+GtkWidget *check_eth_lower;
+GtkWidget *check_btcusd_lower;
+GtkWidget *entry_eth_lower;
 
 static void action_settings_cb ( GSimpleAction *action, GVariant *parameter, gpointer data ) {
 	read_config_file ( );
@@ -550,6 +665,14 @@ static void action_settings_cb ( GSimpleAction *action, GVariant *parameter, gpo
 	gtk_entry_set_text ( ( GtkEntry * ) entry_btcusd_lower, s_s.btcusd_lower );
 	gtk_entry_set_text ( ( GtkEntry * ) entry_btcusd_percent_point, s_s.btcusd_point );
 	gtk_switch_set_active ( ( GtkSwitch * ) switch_btcusd_point, s_s.btcusd_switch );
+
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) check_btcusd_lower, s_s.btc_update );
+	gtk_toggle_button_set_active ( ( GtkToggleButton * ) check_eth_lower, s_s.eth_update );
+
+	gtk_entry_set_text ( ( GtkEntry * ) entry_eth_up, s_s.eth );
+	gtk_entry_set_text ( ( GtkEntry * ) entry_eth_lower, s_s.eth_lower );
+	gtk_entry_set_text ( ( GtkEntry * ) entry_eth_point, s_s.eth_point );
+	gtk_switch_set_active ( ( GtkSwitch * ) switch_eth_point, s_s.eth_switch );
 
 	gtk_widget_show_all ( window_settings );
 }
@@ -574,14 +697,19 @@ static void button_save_clicked_cb ( GtkButton *btn, gpointer data ) {
 	const char *btcusd_lower_str = gtk_entry_get_text ( ( GtkEntry * ) entry_btcusd_lower );
 	const char *btcusd_point_str = gtk_entry_get_text ( ( GtkEntry * ) entry_btcusd_percent_point );
 	s_s.btcusd_switch = gtk_switch_get_active ( ( GtkSwitch * ) switch_btcusd_point );
+	s_s.eth_switch = gtk_switch_get_active ( ( GtkSwitch * ) switch_eth_point );
 
 	strncpy ( &s_s.btcusd[0], btcusd_str, strlen ( btcusd_str ) + 1 );
 	strncpy ( &s_s.btcusd_lower[0], btcusd_lower_str, strlen ( btcusd_lower_str ) + 1 );
 	strncpy ( &s_s.btcusd_point[0], btcusd_point_str, strlen ( btcusd_point_str ) + 1 );
 
-	price_upper = atof ( s_s.btcusd );
-	price_lower = atof ( s_s.btcusd_lower );
+	price_btc_upper_percent = atof ( s_s.btcusd );
+	price_btc_lower = atof ( s_s.btcusd_lower );
 	btcusd_percent_point = atof ( s_s.btcusd_point );
+
+	s_s.btc_update = gtk_toggle_button_get_active ( ( GtkToggleButton * ) check_btcusd_lower );
+	s_s.eth_update = gtk_toggle_button_get_active ( ( GtkToggleButton * ) check_eth_lower );
+
 	write_config_file ( );
 }
 
@@ -596,7 +724,7 @@ static void init_window_settings ( GtkWidget *window ) {
 	window_settings = gtk_application_window_new ( app );
 	g_signal_connect ( window_settings, "delete-event", G_CALLBACK ( window_settings_delete_event_cb ), NULL );
 
-	gtk_window_set_default_size ( ( GtkWindow * ) window_settings, 800, 400 );
+	gtk_window_set_default_size ( ( GtkWindow * ) window_settings, 800, 600 );
 
 	gtk_window_set_modal ( ( GtkWindow * ) window_settings, TRUE );
 	gtk_window_set_transient_for ( ( GtkWindow * ) window_settings, ( GtkWindow * ) window );
@@ -608,13 +736,13 @@ static void init_window_settings ( GtkWidget *window ) {
 	gtk_window_set_titlebar ( ( GtkWindow * ) window_settings, header_bar );
 
 	GtkWidget *label_group_upper = gtk_label_new ( "Подъем в цене в процентах" );
-	GtkWidget *label_btcusd = gtk_label_new ( "BTCUSD" );
+	GtkWidget *label_btcusd = gtk_label_new ( "BTC" );
 	entry_btcusd = gtk_entry_new ( );
 	gtk_entry_set_input_purpose ( ( GtkEntry * ) entry_btcusd, GTK_INPUT_PURPOSE_DIGITS );
 	gtk_entry_set_alignment ( ( GtkEntry * ) entry_btcusd, 1 );
 
 	GtkWidget *label_group_lower = gtk_label_new ( "Нижний порог" );
-	GtkWidget *label_btcusd_lower = gtk_label_new ( "BTCUSD" );
+	check_btcusd_lower = gtk_check_button_new_with_label ( "BTC" );
 	entry_btcusd_lower = gtk_entry_new ( );
 	gtk_entry_set_input_purpose ( ( GtkEntry * ) entry_btcusd_lower, GTK_INPUT_PURPOSE_DIGITS );
 	gtk_entry_set_alignment ( ( GtkEntry * ) entry_btcusd_lower, 1 );
@@ -631,10 +759,10 @@ static void init_window_settings ( GtkWidget *window ) {
 	gtk_widget_set_margin_top ( label_btcusd, 10 );
 	gtk_widget_set_margin_bottom ( label_btcusd, 10 );
 
-	gtk_widget_set_margin_start ( label_btcusd_lower, 10 );
-	gtk_widget_set_margin_end ( label_btcusd_lower, 10 );
-	gtk_widget_set_margin_top ( label_btcusd_lower, 10 );
-	gtk_widget_set_margin_bottom ( label_btcusd_lower, 10 );
+	gtk_widget_set_margin_start ( check_btcusd_lower, 10 );
+	gtk_widget_set_margin_end ( check_btcusd_lower, 10 );
+	gtk_widget_set_margin_top ( check_btcusd_lower, 10 );
+	gtk_widget_set_margin_bottom ( check_btcusd_lower, 10 );
 
 	gtk_widget_set_margin_start ( entry_btcusd_lower, 10 );
 	gtk_widget_set_margin_end ( entry_btcusd_lower, 10 );
@@ -668,8 +796,25 @@ static void init_window_settings ( GtkWidget *window ) {
 
 	gtk_box_pack_start ( ( GtkBox * ) box_label_lower, label_group_lower, FALSE, FALSE, 0 );
 
-	gtk_box_pack_start ( ( GtkBox * ) box_btcusd_lower, label_btcusd_lower, FALSE, FALSE, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) box_btcusd_lower, check_btcusd_lower, FALSE, FALSE, 0 );
 	gtk_box_pack_end ( ( GtkBox * ) box_btcusd_lower, entry_btcusd_lower, FALSE, FALSE, 0 );
+
+	check_eth_lower = gtk_check_button_new_with_label ( "ETH" );
+	entry_eth_lower = gtk_entry_new ( );
+	gtk_entry_set_input_purpose ( ( GtkEntry * ) entry_eth_lower, GTK_INPUT_PURPOSE_DIGITS );
+	gtk_entry_set_alignment ( ( GtkEntry * ) entry_eth_lower, 1 );
+	gtk_widget_set_margin_start ( check_eth_lower, 10 );
+	gtk_widget_set_margin_end ( check_eth_lower, 10 );
+	gtk_widget_set_margin_top ( check_eth_lower, 10 );
+	gtk_widget_set_margin_bottom ( check_eth_lower, 10 );
+	gtk_widget_set_margin_start ( entry_eth_lower, 10 );
+	gtk_widget_set_margin_end ( entry_eth_lower, 10 );
+	gtk_widget_set_margin_top ( entry_eth_lower, 10 );
+	gtk_widget_set_margin_bottom ( entry_eth_lower, 10 );
+	GtkWidget *box_eth_lower = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) box_eth_lower, check_eth_lower, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_eth_lower, entry_eth_lower, FALSE, FALSE, 0 );
+	gtk_widget_set_name ( box_eth_lower, "box_item" );
 
 	gtk_box_pack_start ( ( GtkBox * ) box_lower, box_label_lower, FALSE, FALSE, 0 );
 
@@ -684,14 +829,36 @@ static void init_window_settings ( GtkWidget *window ) {
 	GtkWidget *box_main = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 	gtk_box_pack_start ( ( GtkBox * ) upper_group_box, box_btcusd, FALSE, FALSE, 0 );
 	gtk_container_add ( ( GtkContainer * ) frame_upper, upper_group_box );
+	gtk_frame_set_shadow_type ( ( GtkFrame * ) frame_upper, GTK_SHADOW_IN );
+
+	GtkWidget *label_eth_up = gtk_label_new ( "ETH" );
+	entry_eth_up = gtk_entry_new ( );
+	gtk_entry_set_input_purpose ( ( GtkEntry * ) entry_eth_up, GTK_INPUT_PURPOSE_DIGITS );
+	gtk_entry_set_alignment ( ( GtkEntry * ) entry_eth_up, 1 );
+	gtk_widget_set_margin_start ( label_eth_up, 10 );
+	gtk_widget_set_margin_end ( label_eth_up, 10 );
+	gtk_widget_set_margin_top ( label_eth_up, 10 );
+	gtk_widget_set_margin_bottom ( label_eth_up, 10 );
+	gtk_widget_set_margin_start ( entry_eth_up, 10 );
+	gtk_widget_set_margin_end ( entry_eth_up, 10 );
+	gtk_widget_set_margin_top ( entry_eth_up, 10 );
+	gtk_widget_set_margin_bottom ( entry_eth_up, 10 );
+
+	GtkWidget *box_eth_up = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 1 );
+	gtk_widget_set_name ( box_eth_up, "box_item" );
+	gtk_box_pack_start ( ( GtkBox * ) box_eth_up, label_eth_up, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_eth_up, entry_eth_up, FALSE, FALSE, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) upper_group_box, box_eth_up, FALSE, FALSE, 0 );
 
 	GtkWidget *frame_lower = g_object_new ( GTK_TYPE_FRAME, "shadow-type", GTK_SHADOW_NONE, "name", "group", NULL );
+	gtk_frame_set_shadow_type ( ( GtkFrame * ) frame_lower, GTK_SHADOW_IN );
 	gtk_widget_set_margin_start ( frame_lower, 64 );
 	gtk_widget_set_margin_end ( frame_lower, 64 );
 	gtk_widget_set_margin_top ( frame_lower, 10 );
 	gtk_widget_set_margin_bottom ( frame_lower, 0 );
 	gtk_frame_set_shadow_type ( ( GtkFrame * ) frame_lower, GTK_SHADOW_IN );
 	gtk_box_pack_start ( ( GtkBox * ) box_group_lower, box_btcusd_lower, FALSE, FALSE, 0 );
+	gtk_box_pack_start ( ( GtkBox * ) box_group_lower, box_eth_lower, FALSE, FALSE, 0 );
 	gtk_container_add ( ( GtkContainer * ) frame_lower, box_group_lower );
 
 	GtkWidget *box_label_group_upper = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
@@ -715,8 +882,7 @@ static void init_window_settings ( GtkWidget *window ) {
 
 
 	GtkWidget *label_point = gtk_label_new ( "Точки входа" );
-	GtkWidget *label_btcusd_point_item = gtk_label_new ( "Процент включения BTCUSD" );
-	GtkWidget *label_btcusd_point_switch = gtk_label_new ( "Включить отслеживание для BTCUSD" );
+	GtkWidget *label_btcusd_point_item = gtk_label_new ( "Процент включения BTC" );
 	entry_btcusd_percent_point = gtk_entry_new ( );
 	switch_btcusd_point = gtk_switch_new ( );
 	
@@ -746,10 +912,6 @@ static void init_window_settings ( GtkWidget *window ) {
 	gtk_widget_set_margin_top ( entry_btcusd_percent_point, 10 );
 	gtk_widget_set_margin_end ( entry_btcusd_percent_point, 10 );
 	gtk_widget_set_margin_bottom ( entry_btcusd_percent_point, 10 );
-	gtk_widget_set_margin_start ( label_btcusd_point_switch, 10 );
-	gtk_widget_set_margin_top ( label_btcusd_point_switch, 10 );
-	gtk_widget_set_margin_end ( label_btcusd_point_switch, 10 );
-	gtk_widget_set_margin_bottom ( label_btcusd_point_switch, 10 );
 	gtk_box_pack_end ( ( GtkBox * ) box_btcusd_point_item, entry_btcusd_percent_point, FALSE, FALSE, 0 );
 	gtk_box_pack_end ( ( GtkBox * ) box_btcusd_point_item, switch_btcusd_point, FALSE, FALSE, 0 );
 
@@ -764,16 +926,48 @@ static void init_window_settings ( GtkWidget *window ) {
 	gtk_widget_set_margin_top ( frame_point, 10 );
 	gtk_widget_set_margin_end ( frame_point, 64 );
 	gtk_widget_set_margin_bottom ( frame_point, 10 );
+
+	GtkWidget *label_eth_point = gtk_label_new ( "Процент включения ETH" );
+	entry_eth_point = gtk_entry_new ( );
+	switch_eth_point = gtk_switch_new ( );
+	gtk_entry_set_input_purpose ( ( GtkEntry * ) entry_eth_point, GTK_INPUT_PURPOSE_DIGITS );
+	gtk_entry_set_alignment ( ( GtkEntry * ) entry_eth_point, 1 );
+	GtkWidget *box_eth_point = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+	gtk_widget_set_name ( box_eth_point, "box_item" );
+	gtk_widget_set_margin_start ( label_eth_point, 10 );
+	gtk_widget_set_margin_end ( label_eth_point, 10 );
+	gtk_widget_set_margin_top ( label_eth_point, 10 );
+	gtk_widget_set_margin_bottom ( label_eth_point, 10 );
+	gtk_widget_set_margin_start ( entry_eth_point, 10 );
+	gtk_widget_set_margin_end ( entry_eth_point, 10 );
+	gtk_widget_set_margin_top ( entry_eth_point, 10 );
+	gtk_widget_set_margin_bottom ( entry_eth_point, 10 );
+	gtk_widget_set_margin_start ( switch_eth_point, 10 );
+	gtk_widget_set_margin_end ( switch_eth_point, 10 );
+	gtk_widget_set_margin_top ( switch_eth_point, 10 );
+	gtk_widget_set_margin_bottom ( switch_eth_point, 10 );
+
+	gtk_box_pack_start ( ( GtkBox * ) box_eth_point, label_eth_point, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_eth_point, entry_eth_point, FALSE, FALSE, 0 );
+	gtk_box_pack_end ( ( GtkBox * ) box_eth_point, switch_eth_point, FALSE, FALSE, 0 );
+
+	gtk_box_pack_start ( ( GtkBox * ) box_points, box_eth_point, FALSE, FALSE, 0 );
+
 	gtk_container_add ( ( GtkContainer * ) frame_point, box_points );
 
 	gtk_box_pack_start ( ( GtkBox * ) box_main, box_label_point, FALSE, FALSE, 0 );
 	gtk_box_pack_start ( ( GtkBox * ) box_main, frame_point, FALSE, FALSE, 0 );
 
-	gtk_box_pack_end ( ( GtkBox * ) box_main, box_button_save, FALSE, FALSE, 0 );
+	GtkWidget *latest_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	GtkWidget *scroll = gtk_scrolled_window_new ( NULL, NULL );
+	gtk_container_add ( ( GtkContainer * ) scroll, box_main );
+	gtk_box_pack_start ( ( GtkBox * ) latest_box, scroll, TRUE, TRUE, 0 );
+
+	gtk_box_pack_end ( ( GtkBox * ) latest_box, box_button_save, FALSE, FALSE, 0 );
 
 	g_signal_connect ( button_save, "clicked", G_CALLBACK ( button_save_clicked_cb ), NULL );
 
-	gtk_container_add ( ( GtkContainer * ) window_settings, box_main );
+	gtk_container_add ( ( GtkContainer * ) window_settings, latest_box );
 }
 
 static void ai_show_window ( GtkMenuItem *item, gpointer data ) {
@@ -794,11 +988,17 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 	GtkWidget *action_bar = gtk_action_bar_new ( );
 	GtkWidget *label_action_btc = gtk_label_new ( "BTC" );
+	GtkWidget *label_action_eth = gtk_label_new ( "ETH" );
 	label_btc_update = gtk_label_new ( "" );
+	label_eth_update = gtk_label_new ( "" );
 	gtk_label_set_use_markup ( ( GtkLabel * ) label_btc_update, TRUE );
+	gtk_label_set_use_markup ( ( GtkLabel * ) label_eth_update, TRUE );
 
 	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_action_btc );
 	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_btc_update );
+
+	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_action_eth );
+	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_eth_update );
 
 	ca = ca_gtk_context_get ( );
 
@@ -921,10 +1121,20 @@ static void init_config ( ) {
 		snprintf ( s_s.btcusd, 64, "10.0" );
 		snprintf ( s_s.btcusd_lower, 64, "10.0" );
 		snprintf ( s_s.btcusd_point, 64, "10.0" );
+		snprintf ( s_s.eth, 64, "10.0" );
+		snprintf ( s_s.eth_lower, 64, "10.0" );
+		snprintf ( s_s.eth_point, 64, "10.0" );
 
-		price_upper = atof ( s_s.btcusd );
-		price_lower = atof ( s_s.btcusd_lower );
+		price_btc_upper_percent = atof ( s_s.btcusd );
+		price_btc_lower = atof ( s_s.btcusd_lower );
 		btcusd_percent_point = atof ( s_s.btcusd_point );
+
+		price_eth_upper_percent = atof ( s_s.eth );
+		price_eth_lower = atof ( s_s.eth_lower );
+		eth_percent_point = atof ( s_s.eth_point );
+
+		s_s.btc_update = 0;
+		s_s.eth_update = 0;
 
 		fwrite ( &s_s, sizeof ( struct settings_symbol ), 1, fp );
 		fclose ( fp );
@@ -934,9 +1144,13 @@ static void init_config ( ) {
 		fread ( &s_s, sizeof ( struct settings_symbol ), 1, fp );
 		fclose ( fp );
 
-		price_upper = atof ( s_s.btcusd );
-		price_lower = atof ( s_s.btcusd_lower );
+		price_btc_upper_percent = atof ( s_s.btcusd );
+		price_btc_lower = atof ( s_s.btcusd_lower );
 		btcusd_percent_point = atof ( s_s.btcusd_point );
+
+		price_eth_upper_percent = atof ( s_s.eth );
+		price_eth_lower = atof ( s_s.eth_lower );
+		eth_percent_point = atof ( s_s.eth_point );
 	}
 
 	snprintf ( config_file_error, 255, "%s/%s", config_dir, "binance.error" );
