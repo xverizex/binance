@@ -51,6 +51,7 @@ install:
 	cp data/clear.png ${prefix_default}/share/binance
 clean:
 	rm ${PRG}
+	rm src/vars.h
 uninstall:
 	rm ${prefix_default}/bin/${PRG}
 EOF
