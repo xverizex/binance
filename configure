@@ -45,12 +45,14 @@ all:
 	${CC} ${FLAGS} ${SOURCES} ${LIB} -pthread -o ${PRG}
 install:
 	install ${PRG} ${prefix_default}/bin
-	cp binance.png ${prefix_default}/share/pixmaps
-	cp com.xverizex.binance.desktop ${prefix_default}/share/applications
+	mkdir -p ${prefix_default}/share/binance
+	cp data/binance.png ${prefix_default}/share/pixmaps
+	cp data/com.xverizex.binance.desktop ${prefix_default}/share/applications
+	cp data/clear.png ${prefix_default}/share/binance
 clean:
 	rm ${PRG}
 uninstall:
 	rm ${prefix_default}/bin/${PRG}
 EOF
 
-#echo "#define DEFAULT_CONFIG_FILE \"${prefix_default}/etc/cymix.conf\"" > vars.h
+echo "#define DEFAULT_SHARE_PATH \"${prefix_default}/share/binance\"" > src/vars.h

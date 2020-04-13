@@ -27,6 +27,7 @@
 #include <gtk/gtk.h>
 #include <json-c/json.h>
 #include <canberra-gtk.h>
+#include "vars.h"
 #include <libappindicator/app-indicator.h>
 #include "websocket_client.h"
 
@@ -799,8 +800,16 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_action_btc );
 	gtk_action_bar_pack_start ( ( GtkActionBar * ) action_bar, label_btc_update );
 
-
 	ca = ca_gtk_context_get ( );
+
+	const char *paths[] = {
+		DEFAULT_SHARE_PATH,
+		"/usr/share/icons"
+	};
+
+	GtkIconTheme *theme_icon;
+	theme_icon = gtk_icon_theme_get_default ( );
+	gtk_icon_theme_set_search_path ( theme_icon, paths, 2 );
 
 	AppIndicator *ai;
 	GtkWidget *menu, *item;
@@ -852,7 +861,7 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 	gtk_window_set_default_size ( ( GtkWindow * ) window, 1024, 600 );
 
-	GtkWidget *button_clear = gtk_button_new_with_label ( "Очистить" );
+	GtkWidget *button_clear = gtk_button_new_from_icon_name ( "clear", GTK_ICON_SIZE_BUTTON );
 	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) header_bar, button_clear );
 
 	g_signal_connect ( button_clear, "clicked", G_CALLBACK ( button_clear_clicked_cb ), NULL );

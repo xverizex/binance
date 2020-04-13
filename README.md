@@ -16,6 +16,6 @@ make
 sudo make install
 ```
 
-![](https://i.imgur.com/YUILMjS.png)
-![](https://i.imgur.com/k5U16YM.png)
-![](https://i.imgur.com/zL1hkGe.png)
+![](https://i.imgur.com/onoAVtg.png)
+![](https://i.imgur.com/VMRpMZ3.png)
+![](https://i.imgur.com/TkbejdB.png)
