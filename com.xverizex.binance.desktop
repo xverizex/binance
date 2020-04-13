@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Exec=binance
+Icon=binance
+Terminal=false
+Type=Application
+Categories=Gtk;Utility;
+Keywords=Notify;
+Name=BinanceInfo
+Comment=Show info of binance.
