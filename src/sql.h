@@ -12,4 +12,5 @@ double sql_get_double ( const int index );
 int sql_get_int ( const int index );
 void sql_debug_get_info ( void );
 void sql_get_info_btc ( void );
+void sql_get_info_eth ( void );
 #endif

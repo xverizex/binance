@@ -1134,7 +1134,6 @@ static void button_statistics_clicked_cb ( GtkButton *button, gpointer data ) {
 	sql_get_info ( NULL, NULL );
 
 	while ( sql_get_step ( ) == SQL_ROW ) {
-		printf ( "новая ячейка\n" );
 		int val_id = sql_get_int ( 0 );
 		const char *val_date = sql_get_string ( 1 );
 		const char *val_currency = sql_get_string ( 2 );
@@ -1193,6 +1192,146 @@ struct btc_p {
 	int high;
 };
 
+struct eth_p {
+	int x;
+	int y;
+	int low;
+	int high;
+};
+
+int graph_eth_size_width = 400;
+int graph_eth_size_height = 400;
+
+static void graph_eth_size_allocate_cb ( GtkWidget *widget, GdkRectangle *al, gpointer data ) {
+	graph_eth_size_width = al->width;
+	graph_eth_size_height = al->height;
+}
+
+static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
+	float back_color = 0x3c / 255.0;
+	cairo_set_source_rgb ( cr, back_color, back_color, back_color );
+	cairo_paint ( cr );
+	int border_eth_right = graph_eth_size_width - 96;
+	float line_color = 0xcc / 255.0;
+	cairo_set_source_rgb ( cr, line_color, line_color, line_color );
+	cairo_move_to ( cr, 1, graph_eth_size_height - 32 );
+	cairo_line_to ( cr, border_eth_right, graph_eth_size_height - 32 );
+	cairo_move_to ( cr, border_eth_right, graph_eth_size_height - 32 );
+	cairo_line_to ( cr, border_eth_right, 0 );
+	cairo_stroke ( cr );
+
+	int curpos_x = border_eth_right / 2;
+	int curpos_y = graph_eth_size_height - 24;
+
+	struct date_p *dp = calloc ( 0, sizeof ( struct date_p ) );
+	struct eth_p *p = calloc ( 0, sizeof ( struct eth_p ) );
+	int index = 0;
+	int size = 0;
+
+	double curs_high = 0;
+
+	sql_get_info_eth ( );
+
+	while ( sql_get_step ( ) == SQL_ROW ) {
+		size++;
+		dp = realloc ( dp, sizeof ( struct date_p ) * size );
+		p = realloc ( p, sizeof ( struct eth_p ) * size );
+		const char *date = sql_get_string ( 0 );
+		double low = sql_get_double ( 1 );
+		double high = sql_get_double ( 2 );
+		if ( curs_high < high ) curs_high = high;
+		int day_date;
+		int mon_date;
+		int year_date;
+		sscanf ( date, "%d/%d/%d", &day_date, &mon_date, &year_date );
+		dp[index].x = curpos_x;
+		dp[index].y = curpos_y;
+		dp[index].day = day_date;
+		p[index].x = curpos_x;
+		p[index].low = low;
+		p[index].high = high;
+		index++;
+		curpos_x += 4;
+	}
+	if ( curpos_x >= border_eth_right ) {
+		int space = curpos_x - border_eth_right;
+		for ( int i = 0; i < size; i++ ) {
+			dp[i].x -= space;
+			p[i].x -= space;
+		}
+	}
+
+	cairo_matrix_t mt;
+	cairo_get_font_matrix ( cr, &mt );
+
+	for ( int i = 0; i < size; i++ ) {
+		if ( i % 7 == 0 ) {
+			cairo_move_to ( cr, dp[i].x, dp[i].y );
+			cairo_line_to ( cr, dp[i].x, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 1, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 1, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 2, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 2, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 3, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 3, dp[i].y - 8 );
+
+			char day[10];
+			snprintf ( day, 10, "%d", dp[i].day );
+
+			cairo_move_to ( cr, dp[i].x - mt.xx / 2, dp[i].y + 12 );
+			cairo_show_text ( cr, day );
+		}
+	}
+
+	int border_y = 32;
+
+	cairo_move_to ( cr, border_eth_right, border_y );
+	cairo_line_to ( cr, border_eth_right + 8, border_y );
+	cairo_move_to ( cr, border_eth_right + 10, border_y + mt.xx / 2 );
+	{
+		char max_curs_high[64];
+		snprintf ( max_curs_high, 64, "%.0f", curs_high );
+		cairo_show_text ( cr, max_curs_high );
+	}
+
+	cairo_stroke ( cr );
+
+	int update = 0;
+	/* нарисовать полоски границ */
+	double bhigh = curs_high / ( graph_eth_size_height - 32 - border_y );
+	for ( int i = 0; i < size; i++ ) {
+		double l = p[i].low / bhigh;
+		double h = p[i].high / bhigh;
+		if ( update == 0 ) {
+			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
+		} else
+		if ( update > p[i].high ) {
+			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
+		} else {
+			cairo_set_source_rgb ( cr, 1.0, 0.0, 0.0 );
+		}
+		update = p[i].high;
+		int r = h - l;
+		double l_y = 0 + graph_eth_size_height - 32 - l;
+		double h_y = 0 + graph_eth_size_height - 32 - h;
+
+		cairo_move_to ( cr, p[i].x, l_y );
+		cairo_line_to ( cr, p[i].x, h_y );
+		cairo_move_to ( cr, p[i].x + 1, l_y );
+		cairo_line_to ( cr, p[i].x + 1, h_y );
+		cairo_move_to ( cr, p[i].x + 2, l_y );
+		cairo_line_to ( cr, p[i].x + 2, h_y );
+		cairo_move_to ( cr, p[i].x + 3, l_y );
+		cairo_line_to ( cr, p[i].x + 3, h_y );
+
+		cairo_stroke ( cr );
+	}
+
+	free ( dp );
+	free ( p );
+
+	return TRUE;
+}
 int graph_btc_size_width = 400;
 int graph_btc_size_height = 400;
 
@@ -1222,7 +1361,7 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 	int index = 0;
 	int size = 0;
 
-	int curs_high = 0;
+	double curs_high = 0;
 
 	sql_get_info_btc ( );
 
@@ -1245,7 +1384,7 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		p[index].low = low;
 		p[index].high = high;
 		index++;
-		curpos_x += 2;
+		curpos_x += 4;
 	}
 	if ( curpos_x >= border_btc_right ) {
 		int space = curpos_x - border_btc_right;
@@ -1262,6 +1401,12 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		if ( i % 7 == 0 ) {
 			cairo_move_to ( cr, dp[i].x, dp[i].y );
 			cairo_line_to ( cr, dp[i].x, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 1, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 1, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 2, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 2, dp[i].y - 8 );
+			cairo_move_to ( cr, dp[i].x + 3, dp[i].y );
+			cairo_line_to ( cr, dp[i].x + 3, dp[i].y - 8 );
 
 			char day[10];
 			snprintf ( day, 10, "%d", dp[i].day );
@@ -1278,7 +1423,7 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 	cairo_move_to ( cr, border_btc_right + 10, border_y + mt.xx / 2 );
 	{
 		char max_curs_high[64];
-		snprintf ( max_curs_high, 64, "%d", curs_high );
+		snprintf ( max_curs_high, 64, "%.0f", curs_high );
 		cairo_show_text ( cr, max_curs_high );
 	}
 
@@ -1286,10 +1431,10 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 
 	int update = 0;
 	/* нарисовать полоски границ */
-	int bhigh = curs_high / ( graph_btc_size_height - 32 - border_y );
+	double bhigh = curs_high / ( graph_btc_size_height - 32 - border_y );
 	for ( int i = 0; i < size; i++ ) {
-		int l = p[i].low / bhigh;
-		int h = p[i].high / bhigh;
+		double l = p[i].low / bhigh;
+		double h = p[i].high / bhigh;
 		if ( update == 0 ) {
 			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
 		} else
@@ -1300,9 +1445,17 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		}
 		update = p[i].high;
 		int r = h - l;
+		double l_y = 0 + graph_btc_size_height - 32 - l;
+		double h_y = 0 + graph_btc_size_height - 32 - h;
 
-		cairo_move_to ( cr, p[i].x, 0 + graph_btc_size_height - l );
-		cairo_line_to ( cr, p[i].x, 0 + graph_btc_size_height - h );
+		cairo_move_to ( cr, p[i].x, l_y );
+		cairo_line_to ( cr, p[i].x, h_y );
+		cairo_move_to ( cr, p[i].x + 1, l_y );
+		cairo_line_to ( cr, p[i].x + 1, h_y );
+		cairo_move_to ( cr, p[i].x + 2, l_y );
+		cairo_line_to ( cr, p[i].x + 2, h_y );
+		cairo_move_to ( cr, p[i].x + 3, l_y );
+		cairo_line_to ( cr, p[i].x + 3, h_y );
 
 		cairo_stroke ( cr );
 	}
@@ -1446,8 +1599,13 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 	g_signal_connect ( graph_btc, "size-allocate", G_CALLBACK ( graph_btc_size_allocate_cb ), NULL );
 	g_signal_connect ( graph_btc, "draw", G_CALLBACK ( graph_btc_draw_cb ), NULL );
 
+	GtkWidget *graph_eth = view_graph_new ( );
+	g_signal_connect ( graph_eth, "size-allocate", G_CALLBACK ( graph_eth_size_allocate_cb ), NULL );
+	g_signal_connect ( graph_eth, "draw", G_CALLBACK ( graph_eth_draw_cb ), NULL );
+
 	GtkWidget *notebook_graph = gtk_notebook_new ( );
 	gtk_notebook_append_page ( ( GtkNotebook * ) notebook_graph, graph_btc, gtk_label_new ( "BTC" ) );
+	gtk_notebook_append_page ( ( GtkNotebook * ) notebook_graph, graph_eth, gtk_label_new ( "ETH" ) );
 	gtk_box_pack_start ( ( GtkBox * ) graphic_box, notebook_graph, TRUE, TRUE, 0 );
 
 	gtk_container_add ( ( GtkContainer * ) window, main_box );

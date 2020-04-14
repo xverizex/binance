@@ -54,6 +54,12 @@ void sql_get_info_btc ( ) {
 	sqlite3_prepare_v2 ( sql, query, strlen ( query ), &stmt, NULL );
 }
 
+void sql_get_info_eth ( ) {
+	char query[255];
+	snprintf ( query, 255, "SELECT date, low, high FROM curs WHERE currency = '%s';", "ETHUSDT" );
+	sqlite3_prepare_v2 ( sql, query, strlen ( query ), &stmt, NULL );
+}
+
 void sql_debug_get_info ( ) {
 	char query[255];
 	snprintf ( query, 255, "SELECT id, date, currency, low, high FROM curs;" );
