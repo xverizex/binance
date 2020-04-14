@@ -591,7 +591,7 @@ static void action_connect_cb ( GSimpleAction *action, GVariant *parameter, gpoi
 	ws_write ( &ws );
 }
 
-const char *style = "box#box_select { background-color: #4c4c4c; } label#label_symbol { color: #e1ff5a; } label#label_kline { color: #e1ff5a; } frame#frame_top { background-color: #3c3c3c; border-radius: 6px; } button#button_accept { border-radius: 6px; } button#button_clear { border-radius: 6px; } frame#group { } box#box_item { background-color: #cccccc; } label#curs_up { color: #3aff9d; } label#curs_down { color: #ff1317; }";
+const char *style = "box#box_select { background-color: #4c4c4c; } label#label_symbol { color: #e1ff5a; } label#label_kline { color: #e1ff5a; } frame#frame_top { background-color: #3c3c3c; border-radius: 6px; } button#button_accept { border-radius: 6px; } button#button_clear { border-radius: 6px; } frame#group { } box#box_item { background-color: #cccccc; } label#curs_up { color: #3aff9d; } label#curs_down { color: #ff1317; } button#button_left { border-top-left-radius: 10px; border-bottom-left-radius: 10px; } button#button_right { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }";
 
 static void get_tree_store ( GtkWidget *tree_view ) {
 	store = gtk_tree_store_new ( N_COUNT,
@@ -1004,12 +1004,66 @@ static void ai_exit_program ( GtkMenuItem *item, gpointer data ) {
 	exit ( EXIT_SUCCESS );
 }
 
+#define PAGE_MAIN             0
+#define PAGE_STATISTICS       1
+#define PAGE_GRAPHIC          2
+int current_page = 0;
+GtkWidget *main_box;
+GtkWidget *statistics_box;
+GtkWidget *graphic_box;
+
+static void button_main_clicked_cb ( GtkButton *button, gpointer data ) {
+	if ( current_page == PAGE_STATISTICS ) {
+		g_object_ref ( statistics_box );
+		gtk_container_remove ( ( GtkContainer * ) window, statistics_box );
+		gtk_container_add ( ( GtkContainer * ) window, main_box );
+	} else
+	if ( current_page == PAGE_GRAPHIC ) {
+		g_object_ref ( graphic_box );
+		gtk_container_remove ( ( GtkContainer * ) window, graphic_box );
+		gtk_container_add ( ( GtkContainer * ) window, main_box );
+	}
+	current_page = PAGE_MAIN;
+	
+}
+
+static void button_statistics_clicked_cb ( GtkButton *button, gpointer data ) {
+	if ( current_page == PAGE_MAIN ) {
+		g_object_ref ( main_box );
+		gtk_container_remove ( ( GtkContainer * ) window, main_box );
+		gtk_container_add ( ( GtkContainer * ) window, statistics_box );
+	} else
+	if ( current_page == PAGE_GRAPHIC ) {
+		g_object_ref ( graphic_box );
+		gtk_container_remove ( ( GtkContainer * ) window, graphic_box );
+		gtk_container_add ( ( GtkContainer * ) window, statistics_box );
+	}
+	current_page = PAGE_STATISTICS;
+	
+}
+
+static void button_graphic_clicked_cb ( GtkButton *button, gpointer data ) {
+	if ( current_page == PAGE_MAIN ) {
+		g_object_ref ( main_box );
+		gtk_container_remove ( ( GtkContainer * ) window, main_box );
+		gtk_container_add ( ( GtkContainer * ) window, graphic_box );
+	} else
+	if ( current_page == PAGE_STATISTICS ) {
+		g_object_ref ( statistics_box );
+		gtk_container_remove ( ( GtkContainer * ) window, statistics_box );
+		gtk_container_add ( ( GtkContainer * ) window, graphic_box );
+	}
+	
+	current_page = PAGE_GRAPHIC;
+	
+}
 
 static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 	
 	GMainLoop *loop = g_main_loop_new ( NULL, FALSE );
 
 	window = gtk_application_window_new ( app );
+
 
 	GtkWidget *action_bar = gtk_action_bar_new ( );
 	GtkWidget *label_action_btc = gtk_label_new ( "BTC" );
@@ -1091,7 +1145,7 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 	g_signal_connect ( button_clear, "clicked", G_CALLBACK ( button_clear_clicked_cb ), NULL );
 
-	GtkWidget *main_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	main_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 
 	GtkWidget *tree_view = gtk_tree_view_new ( );
 	GtkWidget *scroll = gtk_scrolled_window_new ( NULL, NULL );
@@ -1102,6 +1156,27 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 	gtk_box_pack_start ( ( GtkBox * ) main_box, scroll, TRUE, TRUE, 0 );
 	gtk_box_pack_start ( ( GtkBox * ) main_box, action_bar, FALSE, FALSE, 0 );
+
+	GtkWidget *box_header = gtk_box_new ( GTK_ORIENTATION_HORIZONTAL, 0 );
+
+	GtkWidget *button_main = gtk_button_new_with_label ( "Главная" );
+	gtk_widget_set_name ( button_main, "button_left" );
+	gtk_box_pack_start ( ( GtkBox * ) box_header, button_main, FALSE, FALSE, 0 );
+	g_signal_connect ( button_main, "clicked", G_CALLBACK ( button_main_clicked_cb ), NULL );
+
+	GtkWidget *button_statistics = gtk_button_new_with_label ( "Статистика" );
+	gtk_box_pack_start ( ( GtkBox * ) box_header, button_statistics, FALSE, FALSE, 0 );
+	g_signal_connect ( button_statistics, "clicked", G_CALLBACK ( button_statistics_clicked_cb ), NULL );
+
+	GtkWidget *button_graphic = gtk_button_new_with_label ( "График" );
+	gtk_widget_set_name ( button_graphic, "button_right" );
+	gtk_box_pack_start ( ( GtkBox * ) box_header, button_graphic, FALSE, FALSE, 0 );
+	g_signal_connect ( button_graphic, "clicked", G_CALLBACK ( button_graphic_clicked_cb ), NULL );
+
+	gtk_header_bar_set_custom_title ( ( GtkHeaderBar * ) header_bar, box_header );
+
+	statistics_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+	graphic_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
 
 	gtk_container_add ( ( GtkContainer * ) window, main_box );
 
