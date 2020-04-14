@@ -16,8 +16,6 @@ make
 sudo make install
 ```
 
-![](https://i.imgur.com/mdm6vdg.png)
-![](https://i.imgur.com/srv0ahq.png)
-![](https://i.imgur.com/hzNJBdC.png)
+![](https://i.imgur.com/L3NdPjO.png)
 
 есть видео https://www.youtube.com/watch?v=RzDk3O8wL3U&feature=youtu.be
