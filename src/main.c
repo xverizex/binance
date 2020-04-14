@@ -259,9 +259,6 @@ static void parse_line ( char *buffer ) {
 	snprintf ( ts_time, 32, "%02d/%02d %02d:%02d", ts->tm_mday, ts->tm_mon, ts->tm_hour, ts->tm_min );
 	snprintf ( tc_time, 32, "%02d/%02d %02d:%02d", tc->tm_mday, tc->tm_mon, tc->tm_hour, tc->tm_min );
 
-	static int update_curs = 0;
-	update_curs++;
-
 	switch ( type_of_coin ) {
 		case TYPE_OF_COIN_BTC:
 			{
@@ -270,7 +267,7 @@ static void parse_line ( char *buffer ) {
 					snprintf ( btc_update, 64, "%.0f", price_item );
 					btc_update_mutex = 1;
 					g_idle_add ( update_cb, NULL );
-				} else if ( curs[0] >= '0' && curs[0] <= '9' && !btc_update_mutex && update_curs > 10 ) {
+				} else if ( curs[0] >= '0' && curs[0] <= '9' && !btc_update_mutex ) {
 					double cu = atof ( curs );
 					if ( cu > price_item ) {
 						snprintf ( btc_update, 64, "<span foreground='red'>%.0f</span>", price_item );
@@ -278,7 +275,6 @@ static void parse_line ( char *buffer ) {
 						snprintf ( btc_update, 64, "<span foreground='green'>%.0f</span>", price_item );
 					}
 					btc_update_mutex = 1;
-					update_curs = 0;
 					g_idle_add ( update_cb, NULL );
 				}
 				if ( !s_s.btc_update ) break;
@@ -350,7 +346,7 @@ static void parse_line ( char *buffer ) {
 					snprintf ( eth_update, 64, "%.0f", price_item );
 					eth_update_mutex = 1;
 					g_idle_add ( update_eth_cb, NULL );
-				} else if ( curs[0] >= '0' && curs[0] <= '9' && !eth_update_mutex && update_curs > 10 ) {
+				} else if ( curs[0] >= '0' && curs[0] <= '9' && !eth_update_mutex ) {
 					double cu = atof ( curs );
 					if ( cu > price_item ) {
 						snprintf ( eth_update, 64, "<span foreground='red'>%.0f</span>", price_item );
@@ -358,7 +354,6 @@ static void parse_line ( char *buffer ) {
 						snprintf ( eth_update, 64, "<span foreground='green'>%.0f</span>", price_item );
 					}
 					eth_update_mutex = 1;
-					update_curs = 0;
 					g_idle_add ( update_eth_cb, NULL );
 				}
 				if ( !s_s.eth_update ) break;
