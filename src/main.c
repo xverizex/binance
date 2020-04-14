@@ -808,6 +808,10 @@ static void button_save_clicked_cb ( GtkButton *btn, gpointer data ) {
 	price_btc_lower = atof ( s_s.btcusd_lower );
 	btcusd_percent_point = atof ( s_s.btcusd_point );
 
+	price_eth_upper_percent = atof ( s_s.eth );
+	price_eth_lower = atof ( s_s.eth_lower );
+	eth_percent_point = atof ( s_s.eth_point );
+
 	s_s.btc_update = gtk_toggle_button_get_active ( ( GtkToggleButton * ) check_btcusd_lower );
 	s_s.eth_update = gtk_toggle_button_get_active ( ( GtkToggleButton * ) check_eth_lower );
 
