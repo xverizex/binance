@@ -1297,8 +1297,8 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		update = p[i].high;
 		int r = h - l;
 
-		cairo_move_to ( cr, p[i].x, 0 + graph_btc_size_height - l - 32 );
-		cairo_line_to ( cr, p[i].x, 0 + graph_btc_size_height - h - 32 );
+		cairo_move_to ( cr, p[i].x, 0 + graph_btc_size_height - l );
+		cairo_line_to ( cr, p[i].x, 0 + graph_btc_size_height - h );
 
 		cairo_stroke ( cr );
 	}
