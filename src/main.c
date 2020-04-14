@@ -27,7 +27,9 @@
 #include <gtk/gtk.h>
 #include <json-c/json.h>
 #include <canberra-gtk.h>
+#include "sql.h"
 #include "vars.h"
+#include "view_graph.h"
 #include <libappindicator/app-indicator.h>
 #include "websocket_client.h"
 
@@ -43,6 +45,7 @@ GtkWidget *label_eth_update;
 
 char *config_dir;
 char *config_file;
+char *config_db;
 char *config_file_error;
 
 double price_btc_upper_percent;
@@ -82,6 +85,15 @@ enum {
 	N_COUNT
 };
 
+enum {
+	ID_STAT,
+	DATE_STAT,
+	COIN_STAT,
+	LOW_STAT,
+	HIGH_STAT,
+	COUNT_STAT
+};
+
 struct settings_symbol {
 	int btc_update;
 	char btcusd[64];
@@ -98,6 +110,7 @@ struct settings_symbol {
 
 
 GtkTreeStore *store;
+GtkTreeStore *store_stat;
 ca_context *ca;
 
 int overflow_btc = 0;
@@ -210,6 +223,44 @@ static void parse_line ( char *buffer ) {
 	int type_of_coin = -1;
 	if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "BTCUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_BTC;
 	else if ( !strncmp ( json_object_get_string ( obj_symbol_trade ), "ETHUSDT", 8 ) ) type_of_coin = TYPE_OF_COIN_ETH;
+
+	/* получить информацию о курсе */
+	{
+		char date_time_str[64];
+		char type_coin[64];
+		time_t time_val = time ( NULL );
+		struct tm *tt = gmtime ( &time_val );
+		snprintf ( date_time_str, 64, "%d/%d/%d", tt->tm_mday, tt->tm_mon, tt->tm_year );
+		switch ( type_of_coin ) {
+			case TYPE_OF_COIN_BTC: snprintf ( type_coin, 64, "%s", "BTCUSDT" ); break;
+			case TYPE_OF_COIN_ETH: snprintf ( type_coin, 64, "%s", "ETHUSDT" ); break;
+		}
+		sql_get_info ( date_time_str, type_coin );
+
+		if ( sql_get_step ( ) == SQL_ROW ) {
+			double record_price_low = sql_get_double ( 2 );
+			double record_price_high = sql_get_double ( 3 );
+			if ( price_item < record_price_low ) record_price_low = price_item;
+			if ( price_item > record_price_high ) record_price_high = price_item;
+			char query[255];
+			snprintf ( query, 255, "UPDATE curs SET low = %.0f, high = %.0f WHERE date = '%s' AND currency = '%s';", 
+					record_price_low,
+					record_price_high,
+					date_time_str,
+					type_coin
+					);
+			sql_put_records ( query );
+		} else {
+			char query[255];
+			snprintf ( query, 255, "INSERT INTO curs ( date, currency, low, high ) VALUES ( '%s', '%s', %.0f, %.0f );", 
+					date_time_str,
+					type_coin,
+					price_item,
+					price_item
+					);
+			sql_put_records ( query );
+		}
+	}
 
 	switch ( type_of_coin ) {
 		case TYPE_OF_COIN_BTC:
@@ -588,6 +639,36 @@ static void action_connect_cb ( GSimpleAction *action, GVariant *parameter, gpoi
 
 const char *style = "box#box_select { background-color: #4c4c4c; } label#label_symbol { color: #e1ff5a; } label#label_kline { color: #e1ff5a; } frame#frame_top { background-color: #3c3c3c; border-radius: 6px; } button#button_accept { border-radius: 6px; } button#button_clear { border-radius: 6px; } frame#group { } box#box_item { background-color: #cccccc; } label#curs_up { color: #3aff9d; } label#curs_down { color: #ff1317; } button#button_left { border-top-left-radius: 10px; border-bottom-left-radius: 10px; } button#button_right { border-top-right-radius: 10px; border-bottom-right-radius: 10px; }";
 
+static void get_tree_statistics_store ( GtkWidget *tree_view_statistics ) {
+	store_stat = gtk_tree_store_new ( COUNT_STAT,
+			G_TYPE_INT,
+			G_TYPE_STRING,
+			G_TYPE_STRING,
+			G_TYPE_STRING,
+			G_TYPE_STRING
+			);
+
+	GtkTreeViewColumn *column;
+	GtkCellRenderer *renderer;
+
+	const char *cells[] = {
+		"id",
+		"дата",
+		"валюта",
+		"нижняя граница",
+		"верхняя граница"
+	};
+
+
+	for ( int i = 0; i < COUNT_STAT; i++ ) {
+		renderer = gtk_cell_renderer_text_new ( );
+		column = gtk_tree_view_column_new_with_attributes ( cells[i], renderer, "text", i, NULL );
+		gtk_tree_view_column_set_resizable ( ( GtkTreeViewColumn * ) column, TRUE );
+		gtk_tree_view_append_column ( ( GtkTreeView * ) tree_view_statistics, column );
+	}
+
+	gtk_tree_view_set_model ( ( GtkTreeView * ) tree_view_statistics, ( GtkTreeModel * ) store_stat );
+}
 static void get_tree_store ( GtkWidget *tree_view ) {
 	store = gtk_tree_store_new ( N_COUNT,
 			G_TYPE_INT,
@@ -1006,17 +1087,22 @@ int current_page = 0;
 GtkWidget *main_box;
 GtkWidget *statistics_box;
 GtkWidget *graphic_box;
+GtkWidget *button_clear;
 
 static void button_main_clicked_cb ( GtkButton *button, gpointer data ) {
 	if ( current_page == PAGE_STATISTICS ) {
 		g_object_ref ( statistics_box );
 		gtk_container_remove ( ( GtkContainer * ) window, statistics_box );
 		gtk_container_add ( ( GtkContainer * ) window, main_box );
+		gtk_widget_show_all ( main_box );
+		gtk_widget_show ( button_clear );
 	} else
 	if ( current_page == PAGE_GRAPHIC ) {
 		g_object_ref ( graphic_box );
 		gtk_container_remove ( ( GtkContainer * ) window, graphic_box );
 		gtk_container_add ( ( GtkContainer * ) window, main_box );
+		gtk_widget_show_all ( main_box );
+		gtk_widget_show ( button_clear );
 	}
 	current_page = PAGE_MAIN;
 	
@@ -1027,14 +1113,44 @@ static void button_statistics_clicked_cb ( GtkButton *button, gpointer data ) {
 		g_object_ref ( main_box );
 		gtk_container_remove ( ( GtkContainer * ) window, main_box );
 		gtk_container_add ( ( GtkContainer * ) window, statistics_box );
+		gtk_widget_show_all ( statistics_box );
+		gtk_widget_hide ( button_clear );
 	} else
 	if ( current_page == PAGE_GRAPHIC ) {
 		g_object_ref ( graphic_box );
 		gtk_container_remove ( ( GtkContainer * ) window, graphic_box );
 		gtk_container_add ( ( GtkContainer * ) window, statistics_box );
+		gtk_widget_show_all ( statistics_box );
+		gtk_widget_hide ( button_clear );
 	}
 	current_page = PAGE_STATISTICS;
-	
+
+	gtk_tree_store_clear ( store_stat );
+
+	sql_get_info ( NULL, NULL );
+
+	while ( sql_get_step ( ) == SQL_ROW ) {
+		printf ( "новая ячейка\n" );
+		int val_id = sql_get_int ( 0 );
+		const char *val_date = sql_get_string ( 1 );
+		const char *val_currency = sql_get_string ( 2 );
+		double val_low = sql_get_double ( 3 );
+		double val_high = sql_get_double ( 4 );
+		char low_str[64];
+		char high_str[64];
+		snprintf ( low_str, 64, "%.0f", val_low );
+		snprintf ( high_str, 64, "%.0f", val_high );
+		GtkTreeIter iter;
+		gtk_tree_store_append ( store_stat, &iter, NULL );
+		gtk_tree_store_set ( store_stat, &iter,
+				ID_STAT, val_id,
+				DATE_STAT, val_date,
+				COIN_STAT, val_currency,
+				LOW_STAT, low_str,
+				HIGH_STAT, high_str,
+				-1
+				);
+	}
 }
 
 static void button_graphic_clicked_cb ( GtkButton *button, gpointer data ) {
@@ -1042,15 +1158,155 @@ static void button_graphic_clicked_cb ( GtkButton *button, gpointer data ) {
 		g_object_ref ( main_box );
 		gtk_container_remove ( ( GtkContainer * ) window, main_box );
 		gtk_container_add ( ( GtkContainer * ) window, graphic_box );
+		gtk_widget_show_all ( graphic_box );
+		gtk_widget_hide ( button_clear );
 	} else
 	if ( current_page == PAGE_STATISTICS ) {
 		g_object_ref ( statistics_box );
 		gtk_container_remove ( ( GtkContainer * ) window, statistics_box );
 		gtk_container_add ( ( GtkContainer * ) window, graphic_box );
+		gtk_widget_show_all ( graphic_box );
+		gtk_widget_hide ( button_clear );
 	}
 	
 	current_page = PAGE_GRAPHIC;
 	
+}
+
+#define DP_SIZE                 3000
+
+struct date_p {
+	int x;
+	int y;
+	int day;
+	char name[10];
+};
+
+struct btc_p {
+	int x;
+	int y;
+	int low;
+	int high;
+};
+
+int graph_btc_size_width = 400;
+int graph_btc_size_height = 400;
+
+static void graph_btc_size_allocate_cb ( GtkWidget *widget, GdkRectangle *al, gpointer data ) {
+	graph_btc_size_width = al->width;
+	graph_btc_size_height = al->height;
+}
+
+static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer data ) {
+	float back_color = 0x3c / 255.0;
+	cairo_set_source_rgb ( cr, back_color, back_color, back_color );
+	cairo_paint ( cr );
+	int border_btc_right = graph_btc_size_width - 96;
+	float line_color = 0xcc / 255.0;
+	cairo_set_source_rgb ( cr, line_color, line_color, line_color );
+	cairo_move_to ( cr, 1, graph_btc_size_height - 32 );
+	cairo_line_to ( cr, border_btc_right, graph_btc_size_height - 32 );
+	cairo_move_to ( cr, border_btc_right, graph_btc_size_height - 32 );
+	cairo_line_to ( cr, border_btc_right, 0 );
+	cairo_stroke ( cr );
+
+	int curpos_x = border_btc_right / 2;
+	int curpos_y = graph_btc_size_height - 24;
+
+	struct date_p *dp = calloc ( 0, sizeof ( struct date_p ) );
+	struct btc_p *p = calloc ( 0, sizeof ( struct btc_p ) );
+	int index = 0;
+	int size = 0;
+
+	int curs_high = 0;
+
+	sql_get_info_btc ( );
+
+	while ( sql_get_step ( ) == SQL_ROW ) {
+		size++;
+		dp = realloc ( dp, sizeof ( struct date_p ) * size );
+		p = realloc ( p, sizeof ( struct btc_p ) * size );
+		const char *date = sql_get_string ( 0 );
+		double low = sql_get_double ( 1 );
+		double high = sql_get_double ( 2 );
+		if ( curs_high < high ) curs_high = high;
+		int day_date;
+		int mon_date;
+		int year_date;
+		sscanf ( date, "%d/%d/%d", &day_date, &mon_date, &year_date );
+		dp[index].x = curpos_x;
+		dp[index].y = curpos_y;
+		dp[index].day = day_date;
+		p[index].x = curpos_x;
+		p[index].low = low;
+		p[index].high = high;
+		index++;
+		curpos_x += 2;
+	}
+	if ( curpos_x >= border_btc_right ) {
+		int space = curpos_x - border_btc_right;
+		for ( int i = 0; i < size; i++ ) {
+			dp[i].x -= space;
+			p[i].x -= space;
+		}
+	}
+
+	cairo_matrix_t mt;
+	cairo_get_font_matrix ( cr, &mt );
+
+	for ( int i = 0; i < size; i++ ) {
+		if ( i % 7 == 0 ) {
+			cairo_move_to ( cr, dp[i].x, dp[i].y );
+			cairo_line_to ( cr, dp[i].x, dp[i].y - 8 );
+
+			char day[10];
+			snprintf ( day, 10, "%d", dp[i].day );
+
+			cairo_move_to ( cr, dp[i].x - mt.xx / 2, dp[i].y + 12 );
+			cairo_show_text ( cr, day );
+		}
+	}
+
+	int border_y = 32;
+
+	cairo_move_to ( cr, border_btc_right, border_y );
+	cairo_line_to ( cr, border_btc_right + 8, border_y );
+	cairo_move_to ( cr, border_btc_right + 10, border_y + mt.xx / 2 );
+	{
+		char max_curs_high[64];
+		snprintf ( max_curs_high, 64, "%d", curs_high );
+		cairo_show_text ( cr, max_curs_high );
+	}
+
+	cairo_stroke ( cr );
+
+	int update = 0;
+	/* нарисовать полоски границ */
+	int bhigh = curs_high / ( graph_btc_size_height - 32 - border_y );
+	for ( int i = 0; i < size; i++ ) {
+		int l = p[i].low / bhigh;
+		int h = p[i].high / bhigh;
+		if ( update == 0 ) {
+			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
+		} else
+		if ( update > p[i].high ) {
+			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
+		} else {
+			cairo_set_source_rgb ( cr, 1.0, 0.0, 0.0 );
+		}
+		update = p[i].high;
+		int r = h - l;
+
+		cairo_move_to ( cr, p[i].x, 0 + graph_btc_size_height - l - 32 );
+		cairo_line_to ( cr, p[i].x, 0 + graph_btc_size_height - h - 32 );
+
+		cairo_stroke ( cr );
+	}
+
+	free ( dp );
+	free ( p );
+
+	return TRUE;
 }
 
 static void g_startup_cb ( GtkApplication *app, gpointer data ) {
@@ -1135,7 +1391,7 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 	gtk_window_set_default_size ( ( GtkWindow * ) window, 1024, 600 );
 
-	GtkWidget *button_clear = gtk_button_new_from_icon_name ( "clear", GTK_ICON_SIZE_BUTTON );
+	button_clear = gtk_button_new_from_icon_name ( "clear", GTK_ICON_SIZE_BUTTON );
 	gtk_header_bar_pack_end ( ( GtkHeaderBar * ) header_bar, button_clear );
 
 	g_signal_connect ( button_clear, "clicked", G_CALLBACK ( button_clear_clicked_cb ), NULL );
@@ -1171,7 +1427,24 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 	gtk_header_bar_set_custom_title ( ( GtkHeaderBar * ) header_bar, box_header );
 
 	statistics_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+
+	GtkWidget *tree_view_statistics = gtk_tree_view_new ( );
+	GtkWidget *scroll_statistics = gtk_scrolled_window_new ( NULL, NULL );
+	gtk_scrolled_window_set_policy ( ( GtkScrolledWindow * ) scroll_statistics, GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC );
+	gtk_container_add ( ( GtkContainer * ) scroll_statistics, tree_view_statistics );
+	get_tree_statistics_store ( tree_view_statistics );
+
+	gtk_box_pack_start ( ( GtkBox * ) statistics_box, scroll_statistics, TRUE, TRUE, 0 );
+
 	graphic_box = gtk_box_new ( GTK_ORIENTATION_VERTICAL, 0 );
+
+	GtkWidget *graph_btc = view_graph_new ( );
+	g_signal_connect ( graph_btc, "size-allocate", G_CALLBACK ( graph_btc_size_allocate_cb ), NULL );
+	g_signal_connect ( graph_btc, "draw", G_CALLBACK ( graph_btc_draw_cb ), NULL );
+
+	GtkWidget *notebook_graph = gtk_notebook_new ( );
+	gtk_notebook_append_page ( ( GtkNotebook * ) notebook_graph, graph_btc, gtk_label_new ( "BTC" ) );
+	gtk_box_pack_start ( ( GtkBox * ) graphic_box, notebook_graph, TRUE, TRUE, 0 );
 
 	gtk_container_add ( ( GtkContainer * ) window, main_box );
 
@@ -1181,16 +1454,27 @@ static void g_startup_cb ( GtkApplication *app, gpointer data ) {
 
 }
 
+static void print_error_file ( const char *config_file_error, const char *error ) {
+       FILE *fp = fopen ( config_file_error, "a" );
+       time_t cur_time = time ( NULL );
+       fprintf ( fp, "%s %s\n", ctime ( &cur_time ), error );
+       fclose ( fp );
+}
+
 static void init_config ( ) {
 	config_dir = calloc ( 255, 1 );
 	config_file = calloc ( 255, 1 );
 	config_file_error = calloc ( 255, 1 );
+	config_db = calloc ( 255, 1 );
 
 	const char *home = getenv ( "HOME" );
 
 	snprintf ( config_dir, 255, "%s/.binance_bot", home );
 	snprintf ( config_file, 255, "%s/binance.data", config_dir );
 	snprintf ( config_file_error, 255, "%s/%s", home, "binance.error" );
+	snprintf ( config_db, 255, "%s/data.sql", config_dir );
+
+
 
 	if ( access ( config_dir, F_OK ) ) {
 		mkdir ( config_dir, 0770 );
@@ -1201,10 +1485,7 @@ static void init_config ( ) {
 			case S_IFDIR: break;
 			default:
 				       {
-					       FILE *fp = fopen ( config_file_error, "a" );
-					       time_t cur_time = time ( NULL );
-					       fprintf ( fp, "%s %s\n", ctime ( &cur_time ), ".binance_bot должен быть каталогом. Можете удалить каталог и программа сама его создаст." );
-					       fclose ( fp );
+					       print_error_file ( config_file_error, ".binance_bot должен быть каталогом. Можете удалить каталог и программа сама его создаст." );
 					       exit ( EXIT_FAILURE );
 				       }
 				       break;
@@ -1249,6 +1530,15 @@ static void init_config ( ) {
 	}
 
 	snprintf ( config_file_error, 255, "%s/%s", config_dir, "binance.error" );
+
+	int ret = sql_open ( config_db );
+	if ( ret == -1 ) {
+		print_error_file ( config_file_error, "Не удалось открыть базу данных." );
+		exit ( EXIT_FAILURE );
+	}
+
+	sql_create_table_if_not_exists ( );
+
 }
 
 int main ( int argc, char **argv ) {

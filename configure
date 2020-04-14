@@ -35,7 +35,7 @@ do
 	SOURCES="$SOURCES $file"
 done
 
-LIB=`pkg-config --libs json-c,libssl,gtk+-3.0,appindicator3-0.1,libcanberra-gtk3 --cflags json-c,libssl,gtk+-3.0,appindicator3-0.1,libcanberra-gtk3`
+LIB=`pkg-config --libs json-c,libssl,gtk+-3.0,appindicator3-0.1,libcanberra-gtk3,sqlite3 --cflags json-c,libssl,gtk+-3.0,appindicator3-0.1,libcanberra-gtk3,sqlite3`
 FLAGS=''
 CC=gcc
 PRG=binance
