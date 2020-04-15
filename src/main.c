@@ -1293,6 +1293,34 @@ static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		snprintf ( max_curs_high, 64, "%.0f", curs_high );
 		cairo_show_text ( cr, max_curs_high );
 	}
+	{
+		int sp;
+		int nn = 1;
+		sp = curs_high / 10;
+	       	while ( sp % 10 != 0 ) {	
+			sp = sp / 10;
+			nn++;
+			if ( sp < 10 ) {
+				sp = 1;
+				break;
+			}
+
+		}
+		for ( int i = 0; i < nn; i++ ) {
+			sp *= 10;
+		}
+		double bhigh = curs_high / ( graph_eth_size_height - 32 - border_y );
+		for ( int i = 0; i < curs_high; i += sp ) {
+			double bor = i / bhigh;
+			double bord = 0 + graph_eth_size_height - 32 - bor;
+			cairo_move_to ( cr, border_eth_right, bord );
+			cairo_line_to ( cr, border_eth_right + 8, bord );
+			cairo_move_to ( cr, border_eth_right + 10, bord + mt.xx / 2 );
+			char max_curs_high[64];
+			snprintf ( max_curs_high, 64, "%d", i );
+			cairo_show_text ( cr, max_curs_high );
+		}
+	}
 
 	cairo_stroke ( cr );
 
@@ -1305,7 +1333,7 @@ static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		if ( update == 0 ) {
 			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
 		} else
-		if ( update > p[i].high ) {
+		if ( update < p[i].high ) {
 			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
 		} else {
 			cairo_set_source_rgb ( cr, 1.0, 0.0, 0.0 );
@@ -1426,6 +1454,34 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		snprintf ( max_curs_high, 64, "%.0f", curs_high );
 		cairo_show_text ( cr, max_curs_high );
 	}
+	{
+		int sp;
+		int nn = 1;
+		sp = curs_high / 10;
+	       	while ( sp % 10 != 0 ) {	
+			sp = sp / 10;
+			nn++;
+			if ( sp < 10 ) {
+				sp = 1;
+				break;
+			}
+
+		}
+		for ( int i = 0; i < nn; i++ ) {
+			sp *= 10;
+		}
+		double bhigh = curs_high / ( graph_btc_size_height - 32 - border_y );
+		for ( int i = 0; i < curs_high; i += sp ) {
+			double bor = i / bhigh;
+			double bord = 0 + graph_btc_size_height - 32 - bor;
+			cairo_move_to ( cr, border_btc_right, bord );
+			cairo_line_to ( cr, border_btc_right + 8, bord );
+			cairo_move_to ( cr, border_btc_right + 10, bord + mt.xx / 2 );
+			char max_curs_high[64];
+			snprintf ( max_curs_high, 64, "%d", i );
+			cairo_show_text ( cr, max_curs_high );
+		}
+	}
 
 	cairo_stroke ( cr );
 
@@ -1438,7 +1494,7 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		if ( update == 0 ) {
 			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
 		} else
-		if ( update > p[i].high ) {
+		if ( update < p[i].high ) {
 			cairo_set_source_rgb ( cr, 0.0, 1.0, 0.0 );
 		} else {
 			cairo_set_source_rgb ( cr, 1.0, 0.0, 0.0 );
