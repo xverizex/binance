@@ -18,5 +18,5 @@ sudo make install
 
 ![](https://i.imgur.com/bbCxUkh.png)
 ![](https://i.imgur.com/Dho6q9a.png)
-![](https://i.imgur.com/q4vJqc9.png)
+![](https://i.imgur.com/1QLEfHm.png)
 ![](https://i.imgur.com/qk9mXnw.png)
