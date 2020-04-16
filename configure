@@ -42,7 +42,7 @@ PRG=binance
 
 cat > makefile <<EOF
 all:
-	${CC} ${FLAGS} ${SOURCES} ${LIB} -pthread -o ${PRG}
+	${CC} ${FLAGS} ${SOURCES} ${LIB} -pthread -lm -o ${PRG}
 install:
 	install ${PRG} ${prefix_default}/bin
 	mkdir -p ${prefix_default}/share/binance

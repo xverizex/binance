@@ -27,6 +27,7 @@
 #include <gtk/gtk.h>
 #include <json-c/json.h>
 #include <canberra-gtk.h>
+#include <math.h>
 #include "sql.h"
 #include "vars.h"
 #include "view_graph.h"
@@ -1288,12 +1289,14 @@ static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 	cairo_move_to ( cr, border_eth_right, border_y );
 	cairo_line_to ( cr, border_eth_right + 8, border_y );
 	cairo_move_to ( cr, border_eth_right + 10, border_y + mt.xx / 2 );
+	double border_curs_high = border_y + mt.xx / 2;
 	{
 		char max_curs_high[64];
 		snprintf ( max_curs_high, 64, "%.0f", curs_high );
 		cairo_show_text ( cr, max_curs_high );
 	}
 	{
+#if 0
 		int sp;
 		int nn = 1;
 		sp = curs_high / 10;
@@ -1309,16 +1312,19 @@ static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		for ( int i = 0; i < nn; i++ ) {
 			sp *= 10;
 		}
+#endif
+		double sp = pow ( 10, floor ( log10 ( curs_high ) ) );
 		double bhigh = curs_high / ( graph_eth_size_height - 32 - border_y );
 		for ( int i = 0; i < curs_high; i += sp ) {
 			double bor = i / bhigh;
 			double bord = 0 + graph_eth_size_height - 32 - bor;
+			double bord_text = bord + mt.xx / 2;
 			cairo_move_to ( cr, border_eth_right, bord );
 			cairo_line_to ( cr, border_eth_right + 8, bord );
 			cairo_move_to ( cr, border_eth_right + 10, bord + mt.xx / 2 );
 			char max_curs_high[64];
 			snprintf ( max_curs_high, 64, "%d", i );
-			cairo_show_text ( cr, max_curs_high );
+			if ( bord_text > border_curs_high + 10 ) cairo_show_text ( cr, max_curs_high );
 		}
 	}
 
@@ -1449,12 +1455,14 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 	cairo_move_to ( cr, border_btc_right, border_y );
 	cairo_line_to ( cr, border_btc_right + 8, border_y );
 	cairo_move_to ( cr, border_btc_right + 10, border_y + mt.xx / 2 );
+	double border_curs_high = border_y + mt.xx / 2;
 	{
 		char max_curs_high[64];
 		snprintf ( max_curs_high, 64, "%.0f", curs_high );
 		cairo_show_text ( cr, max_curs_high );
 	}
 	{
+#if 0
 		int sp;
 		int nn = 1;
 		sp = curs_high / 10;
@@ -1470,16 +1478,19 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		for ( int i = 0; i < nn; i++ ) {
 			sp *= 10;
 		}
+#endif
+		double sp = pow ( 10, floor ( log10 ( curs_high ) ) );
 		double bhigh = curs_high / ( graph_btc_size_height - 32 - border_y );
 		for ( int i = 0; i < curs_high; i += sp ) {
 			double bor = i / bhigh;
 			double bord = 0 + graph_btc_size_height - 32 - bor;
+			double bord_text = bord + mt.xx / 2;
 			cairo_move_to ( cr, border_btc_right, bord );
 			cairo_line_to ( cr, border_btc_right + 8, bord );
 			cairo_move_to ( cr, border_btc_right + 10, bord + mt.xx / 2 );
 			char max_curs_high[64];
 			snprintf ( max_curs_high, 64, "%d", i );
-			cairo_show_text ( cr, max_curs_high );
+			if ( bord_text > border_curs_high + 10 ) cairo_show_text ( cr, max_curs_high );
 		}
 	}
 
