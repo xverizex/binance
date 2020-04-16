@@ -1254,7 +1254,7 @@ static gboolean graph_eth_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		index++;
 		curpos_x += 4;
 	}
-	if ( curpos_x >= border_eth_right ) {
+	if ( curpos_x + 4 >= border_eth_right ) {
 		int space = curpos_x - border_eth_right;
 		for ( int i = 0; i < size; i++ ) {
 			dp[i].x -= space;
@@ -1420,7 +1420,7 @@ static gboolean graph_btc_draw_cb ( GtkWidget *widget, cairo_t *cr, gpointer dat
 		index++;
 		curpos_x += 4;
 	}
-	if ( curpos_x >= border_btc_right ) {
+	if ( curpos_x + 4 >= border_btc_right ) {
 		int space = curpos_x - border_btc_right;
 		for ( int i = 0; i < size; i++ ) {
 			dp[i].x -= space;
