@@ -231,7 +231,7 @@ static void parse_line ( char *buffer ) {
 		char type_coin[64];
 		time_t time_val = time ( NULL );
 		struct tm *tt = gmtime ( &time_val );
-		snprintf ( date_time_str, 64, "%d/%d/%d", tt->tm_mday, tt->tm_mon, tt->tm_year );
+		snprintf ( date_time_str, 64, "%02d/%02d/%02d", tt->tm_mday, tt->tm_mon + 1, tt->tm_year );
 		switch ( type_of_coin ) {
 			case TYPE_OF_COIN_BTC: snprintf ( type_coin, 64, "%s", "BTCUSDT" ); break;
 			case TYPE_OF_COIN_ETH: snprintf ( type_coin, 64, "%s", "ETHUSDT" ); break;
